@@ -1,13 +1,13 @@
 import sqlite3
 
-DB_NAME = "libray.db"
+DB_NAME = "library.db"
 def get_connection():
     conn = sqlite3.connect(DB_NAME)
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
 
-#Initializes he Database
+#Initializes the Database
 def initialize_database():
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -60,17 +60,35 @@ def add_book(title, author, total_copies):
         """, (title, author, total_copies, total_copies))
         conn.commit()
 
+#Delete Book
+def delete_book(book_id):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM Books WHERE book_id = ?", (book_id,))
+        conn.commit()
+
+
+
 def get_book_by_id(book_id):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM Books WHERE book_id = ?", (book_id,))
         return cursor.fetchone()
 
-def search_book(title):
+def search_book(title=None, book_id=None, author=None):
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Books WHERE title = ?", (title,))
-        return cursor.fetchone()   
+
+        if book_id is not None:
+            cursor.execute("SELECT * FROM Books WHERE book_id = ?", (book_id,))
+        elif title is not None:
+            cursor.execute("SELECT * FROM Books WHERE title LIKE ?", (f"%{title}%",))
+        elif author is not None:
+            cursor.execute("SELECT * FROM Books WHERE author LIKE ?", (f"%{author}%",))
+        else:
+            return None
+
+        return cursor.fetchall() 
 
 #Customer CRUD
 def create_customer(first_name, last_name, phone):
