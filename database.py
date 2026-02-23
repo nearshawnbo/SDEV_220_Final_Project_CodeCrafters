@@ -50,7 +50,7 @@ def initialize_database():
         """)
         conn.commit()
 
-# Book CRUD
+# Book CRUD 6 Functions
 def add_book(title, author, total_copies):
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -60,14 +60,23 @@ def add_book(title, author, total_copies):
         """, (title, author, total_copies, total_copies))
         conn.commit()
 
-#Delete Book
 def delete_book(book_id):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM Books WHERE book_id = ?", (book_id,))
         conn.commit()
 
+def update_book(title, author, total_copies, book_id):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE Books SET title =?, author = ?, total_copies = ? WHERE book_id = ?",(title, author, total_copies, book_id,))
+        conn.commit()
 
+def get_all_books():
+     with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM Books")
+        return cursor.fetchall()
 
 def get_book_by_id(book_id):
     with get_connection() as conn:
@@ -90,7 +99,7 @@ def search_book(title=None, book_id=None, author=None):
 
         return cursor.fetchall() 
 
-#Customer CRUD
+#Customer CRUD 5 Functions 
 def create_customer(first_name, last_name, phone):
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -100,7 +109,30 @@ def create_customer(first_name, last_name, phone):
         """, (first_name, last_name, phone))
         conn.commit()
 
-#Checkout CRUD
+def get_customer_by_id(customer_id):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(""" SELECT * FROM Customers WHERE customer_id = ? """, (customer_id,))
+        return cursor.fetchone()
+    
+def get_all_customers():
+     with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM Customers")
+        return cursor.fetchall()
+     
+def update_customer(first_name, last_name, phone, customer_id):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE Customers SET first_name = ?, last_name = ?, phone = ? WHERE customer_id = ?",(first_name, last_name, phone, customer_id,))
+        conn.commit()
+
+def delete_customer(customer_id):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute( " DELETE FROM Customers WHERE customer_id = ?", (customer_id,))
+        conn.commit()
+#Checkout CRUD 5 Functions
 def log_checkout(book_id, customer_id, checkout_date, due_date):
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -132,5 +164,39 @@ def log_return(checkout_id, return_date):
         """, (checkout_id,))
         conn.commit()
 
+def get_active_checkouts():
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute (""" 
+            SELECT Checkouts.checkout_id, Customers.first_name, Customers.last_name, 
+                   Books.title, Checkouts.checkout_date, Checkouts.due_date
+            FROM Checkouts 
+            INNER JOIN Customers ON Checkouts.customer_id = Customers.customer_id
+            INNER JOIN Books ON Checkouts.book_id = Books.book_id
+            WHERE return_date IS NULL
+            """)
+        return cursor.fetchall()
 
-
+def get_checkouts_by_customer (customer_id):     
+       with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute ("""
+            SELECT Checkouts.checkout_id, Customers.first_name, Customers.last_name, 
+                   Books.title, Checkouts.checkout_date, Checkouts.due_date
+            FROM Checkouts
+             INNER JOIN Customers ON Checkouts.customer_id = Customers.customer_id
+            INNER JOIN Books ON Checkouts.book_id = Books.book_id
+            WHERE customer_id = ? """, (customer_id,)) 
+        return cursor.fetchall()
+              
+def get_overdue_books ():
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT Checkouts.checkout_id, Customers.first_name, Customers.last_name, 
+                   Books.title, Checkouts.checkout_date, Checkouts.due_date
+            FROM Checkouts
+            INNER JOIN Customers ON Checkouts.customer_id = Customers.customer_id
+            INNER JOIN Books ON Checkouts.book_id = Books.book_id
+            WHERE due_date < DATE('now') AND  return_date IS NULL""")
+        return cursor.fetchall()
