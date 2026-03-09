@@ -44,12 +44,17 @@ class Library:
         self.books.append(book)
         self.books_by_id[book.book_id] = book
        
-    # Remove Book
+    def remove_book(self, book_id):
+        database.delete_book(book_id)
+        self.books.remove(self.books_by_id[book_id])
+        del self.books_by_id[book_id]
 
-
-
-
-    #Update Book
+    def update_book(self, book_id, title, author, total_copies):
+        database.update_book(title, author, total_copies, book_id)
+        existing_book = self.books_by_id[book_id]
+        existing_book.title = title
+        existing_book.author = author
+        existing_book.total_copies = total_copies
 
 
 

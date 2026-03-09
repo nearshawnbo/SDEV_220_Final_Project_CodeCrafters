@@ -69,7 +69,8 @@ def delete_book(book_id):
 def update_book(title, author, total_copies, book_id):
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("UPDATE Books SET title =?, author = ?, total_copies = ? WHERE book_id = ?",(title, author, total_copies, book_id,))
+        cursor.execute("""UPDATE Books SET title =?, author = ?, total_copies = ?, available_copies = ? - (total_copies - available_copies)
+                         WHERE book_id = ?""",(title, author, total_copies, total_copies,book_id, ))
         conn.commit()
 
 def get_all_books():
@@ -136,16 +137,21 @@ def delete_customer(customer_id):
 def log_checkout(book_id, customer_id, checkout_date, due_date):
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(" SELECT available_copies FROM Books WHERE book_id = ?", (book_id,))
+        book= cursor.fetchone()
+        if book[0] > 0:
+            cursor.execute("""
             INSERT INTO Checkouts (book_id, customer_id, checkout_date, due_date)
             VALUES (?, ?, ?, ?)
         """, (book_id, customer_id, checkout_date, due_date))
-        cursor.execute("""
+            cursor.execute("""
             UPDATE Books
             SET available_copies = available_copies - 1
             WHERE book_id = ? AND available_copies > 0
         """, (book_id,))
-        conn.commit()
+            conn.commit()
+        else:
+            return "No available copies for this book"
 
 def log_return(checkout_id, return_date):
     with get_connection() as conn:
@@ -184,9 +190,9 @@ def get_checkouts_by_customer (customer_id):
             SELECT Checkouts.checkout_id, Customers.first_name, Customers.last_name, 
                    Books.title, Checkouts.checkout_date, Checkouts.due_date
             FROM Checkouts
-             INNER JOIN Customers ON Checkouts.customer_id = Customers.customer_id
+            INNER JOIN Customers ON Checkouts.customer_id = Customers.customer_id
             INNER JOIN Books ON Checkouts.book_id = Books.book_id
-            WHERE customer_id = ? """, (customer_id,)) 
+            WHERE Customers.customer_id = ? """, (customer_id,)) 
         return cursor.fetchall()
               
 def get_overdue_books ():
@@ -200,3 +206,23 @@ def get_overdue_books ():
             INNER JOIN Books ON Checkouts.book_id = Books.book_id
             WHERE due_date < DATE('now') AND  return_date IS NULL""")
         return cursor.fetchall()
+    
+def get_overdue_books_by_customer (customer_id):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT Checkouts.checkout_id, Customers.first_name, Customers.last_name, 
+                   Books.title, Checkouts.checkout_date, Checkouts.due_date
+            FROM Checkouts
+            INNER JOIN Customers ON Checkouts.customer_id = Customers.customer_id
+            INNER JOIN Books ON Checkouts.book_id = Books.book_id
+            WHERE due_date < DATE('now') AND  return_date IS NULL AND Checkouts.customer_id = ?""", (customer_id,))
+        return cursor.fetchall()
+    
+def purge_all_data ():
+     with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute ("DELETE FROM Checkouts")
+        cursor.execute ("DELETE FROM Customers")
+        cursor.execute ("DELETE FROM Books")
+        conn.commit()
