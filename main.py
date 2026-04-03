@@ -1,2 +1,3 @@
-import database
-database.purge_all_data()
+from GUI_Layer import LibraryGUI
+
+LibraryGUI()
