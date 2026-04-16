@@ -1,3 +1,4 @@
+from datetime import datetime
 import database
 class Book:
     def  __init__(self, book_id, title, author, total_copies, available_copies):
@@ -102,9 +103,12 @@ class Library:
     def get_active_checkouts (self):
         return database.get_active_checkouts()
 
-    #Get overdue Books
-    def get_overdue_books (self):
-        return database.get_overdue_books()
+    #Get overdue Books #Fix for GUI_Layer for Overdue Button
+    from datetime import datetime
+
+    def get_overdue_books(self):
+        today = datetime.now().strftime("%Y-%m-%d")
+        return database.get_overdue_books(today)
     
     # Load Books
     def load_books(self):

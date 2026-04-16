@@ -50,21 +50,38 @@ def initialize_database():
         """)
         conn.commit()
 
-# Book CRUD 6 Functions
+# Book CRUD 6 Functions - Bug Fix # 16 - Empty fields on Add Book, Bug Fix # 18. Zero or negative copies. FIX = Added checks to ensure fields aren't blank and that copy counts are valid before sending them to database.
 def add_book(title, author, total_copies):
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO Books (title, author, total_copies, available_copies)
-            VALUES (?, ?, ?, ?)
-        """, (title, author, total_copies, total_copies))
-        conn.commit()
+    # Bug 16: Check for empty fields
+    if not title.strip() or not author.strip():
+        return "Error: Title and Author cannot be empty."
+    
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            # Bug 18: The CHECK constraint in your SQL will trigger an IntegrityError if total_copies < 0
+            cursor.execute("""
+                INSERT INTO Books (title, author, total_copies, available_copies)
+                VALUES (?, ?, ?, ?)
+            """, (title, author, total_copies, total_copies))
+            conn.commit()
+            return "Success"
+    except sqlite3.IntegrityError:
+        return "Error: Total copies must be a positive number."
 
+# Fix for Bug # 2 - Remove book with active checkouts, Critical Bug # 4 - Invalid Book ID on remove - FIX = Updated delete_book and delete_customer to catch active checkouts and check if the ID actually exists 
 def delete_book(book_id):
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM Books WHERE book_id = ?", (book_id,))
-        conn.commit()
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM Books WHERE book_id = ?", (book_id,))
+            if cursor.rowcount == 0:
+                return "Error: Book ID not found."
+            conn.commit()
+            return "Success"
+    except sqlite3.IntegrityError:
+        return "Error: Cannot delete book. It is currently checked out by a customer."
+
 
 def update_book(title, author, total_copies, book_id):
     with get_connection() as conn:
@@ -100,8 +117,12 @@ def search_book(title=None, book_id=None, author=None):
 
         return cursor.fetchall() 
 
-#Customer CRUD 5 Functions 
+#Customer CRUD 5 Functions # Fix for Bug # 17 - Empty fields on Add Customer - FIX = Added checks to ensure fields aren't blank and that copy counts are valid before sending them to the database.
 def create_customer(first_name, last_name, phone):
+    # Bug 17: Check for empty fields
+    if not first_name.strip() or not last_name.strip():
+        return "Error: Customer name cannot be empty."
+        
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -109,13 +130,21 @@ def create_customer(first_name, last_name, phone):
             VALUES (?, ?, ?)
         """, (first_name, last_name, phone))
         conn.commit()
+        return "Success"
 
-def get_customer_by_id(customer_id):
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(""" SELECT * FROM Customers WHERE customer_id = ? """, (customer_id,))
-        return cursor.fetchone()
-    
+# Critical Bug Fix # 3 - Remove customer with active checkouts - FIX = Updated delete_customer to catch active checkouts and check if the ID actually exists in (database.py) folder.
+def delete_customer(customer_id):
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM Customers WHERE customer_id = ?", (customer_id,))
+            if cursor.rowcount == 0:
+                return "Error: Customer ID not found."
+            conn.commit()
+            return "Success"
+    except sqlite3.IntegrityError:
+        return "Error: Cannot delete customer. They still have books checked out."
+
 def get_all_customers():
      with get_connection() as conn:
         cursor = conn.cursor()
@@ -133,25 +162,30 @@ def delete_customer(customer_id):
         cursor = conn.cursor()
         cursor.execute( " DELETE FROM Customers WHERE customer_id = ?", (customer_id,))
         conn.commit()
-#Checkout CRUD 5 Functions
+#Checkout CRUD 5 Functions # Fix for Bug # 1 - Checkout with no available copies - FIX = New code checks if book actually exists before trying to check it out.
 def log_checkout(book_id, customer_id, checkout_date, due_date):
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(" SELECT available_copies FROM Books WHERE book_id = ?", (book_id,))
-        book= cursor.fetchone()
-        if book[0] > 0:
+        cursor.execute("SELECT available_copies FROM Books WHERE book_id = ?", (book_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            return "Error: Book ID does not exist."
+            
+        if result[0] > 0:
             cursor.execute("""
-            INSERT INTO Checkouts (book_id, customer_id, checkout_date, due_date)
-            VALUES (?, ?, ?, ?)
-        """, (book_id, customer_id, checkout_date, due_date))
+                INSERT INTO Checkouts (book_id, customer_id, checkout_date, due_date)
+                VALUES (?, ?, ?, ?)
+            """, (book_id, customer_id, checkout_date, due_date))
             cursor.execute("""
-            UPDATE Books
-            SET available_copies = available_copies - 1
-            WHERE book_id = ? AND available_copies > 0
-        """, (book_id,))
+                UPDATE Books
+                SET available_copies = available_copies - 1
+                WHERE book_id = ?
+            """, (book_id,))
             conn.commit()
+            return "Success"
         else:
-            return "No available copies for this book"
+            return "Error: No available copies left for this book."
 
 def log_return(checkout_id, return_date):
     with get_connection() as conn:
@@ -226,3 +260,19 @@ def purge_all_data ():
         cursor.execute ("DELETE FROM Customers")
         cursor.execute ("DELETE FROM Books")
         conn.commit()
+
+def get_overdue_books(current_date):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT Checkouts.checkout_id, Books.title, Customers.first_name, Checkouts.due_date
+            FROM Checkouts
+            JOIN Books ON Checkouts.book_id = Books.book_id
+            JOIN Customers ON Checkouts.customer_id = Customers.customer_id
+            WHERE Checkouts.return_date IS NULL AND Checkouts.due_date < ?
+        """, (current_date,))
+        return cursor.fetchall()
+
+if __name__ == "__main__":
+    initialize_database()
+    print("Database initialized and tables created successfully.")
